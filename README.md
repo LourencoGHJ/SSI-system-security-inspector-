@@ -59,3 +59,17 @@ Windows
 ## Language
 
 Python 3.13+
+
+### SSI-002 - Unquoted Windows Service Executable Paths
+
+Identifies Windows services whose executable paths:
+
+- Are not enclosed in quotation marks.
+- Contain spaces in the executable path.
+- Reference an executable ending in `.exe`.
+
+The analysis includes service information such as the service name, binary path, account, startup type, and current status.
+
+Findings are classified as LOW.
+
+This detection identifies a potentially unsafe service configuration. It does not confirm exploitability or verify filesystem permissions. Further investigation of directory permissions and executable path resolution is required.
