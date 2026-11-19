@@ -6,6 +6,7 @@ from system_inspector import network_inspector
 from system_inspector import process_inspector
 from system_inspector import security_analyzer
 from system_inspector import service_inspector
+from system_inspector import service_permissions_inspector
 from system_inspector import system_info
 
 
@@ -13,6 +14,10 @@ def generate_report(output_path: str | Path) -> dict:
     """Collect system data, analyze security findings, and save a report."""
     listening_ports = network_inspector.get_listening_ports()
     services = service_inspector.get_windows_services()
+
+    service_directory_permissions = (
+        service_permissions_inspector.inspect_service_permissions(services)
+    )
 
     security_findings = (
         security_analyzer.analyze_listening_ports(listening_ports)
@@ -25,6 +30,7 @@ def generate_report(output_path: str | Path) -> dict:
         "processes": process_inspector.get_running_processes(),
         "listening_ports": listening_ports,
         "services": services,
+        "service_directory_permissions": service_directory_permissions,
         "security_findings": security_findings,
     }
 
