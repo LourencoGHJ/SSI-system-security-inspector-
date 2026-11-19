@@ -7,6 +7,7 @@ from system_inspector import process_inspector
 from system_inspector import security_analyzer
 from system_inspector import service_inspector
 from system_inspector import service_permissions_inspector
+from system_inspector import service_file_permissions_inspector
 from system_inspector import system_info
 
 
@@ -17,6 +18,10 @@ def generate_report(output_path: str | Path) -> dict:
 
     service_directory_permissions = (
         service_permissions_inspector.inspect_service_permissions(services)
+    )
+
+    service_file_permissions = (
+        service_file_permissions_inspector.inspect_service_file_permissions(services)
     )
 
     security_findings = (
@@ -31,6 +36,7 @@ def generate_report(output_path: str | Path) -> dict:
         "listening_ports": listening_ports,
         "services": services,
         "service_directory_permissions": service_directory_permissions,
+        "service_file_permissions": service_file_permissions,
         "security_findings": security_findings,
     }
 

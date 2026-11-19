@@ -239,3 +239,53 @@ def test_get_directory_permissions_rejects_invalid_rights_value(
 
     assert result["status"] == "error"
     assert result["error"] == "Invalid ACL rights value."
+
+def test_get_file_permissions_returns_file_acl_data(monkeypatch):
+    payload = {
+        "path": "C:\\Example\\service.exe",
+        "owner": "NT AUTHORITY\\SYSTEM",
+        "status": "success",
+        "access_rules": [],
+    }
+
+    received_environment = {}
+
+    def fake_run(*args, **kwargs):
+        received_environment.update(kwargs["env"])
+        return make_process_result(json.dumps(payload))
+
+    monkeypatch.setattr(
+        permissions_inspector.subprocess,
+        "run",
+        fake_run,
+    )
+
+    result = permissions_inspector.get_file_permissions(
+        "C:\\Example\\service.exe"
+    )
+
+    assert result["status"] == "success"
+    assert result["path"] == "C:\\Example\\service.exe"
+    assert result["owner"] == "NT AUTHORITY\\SYSTEM"
+    assert received_environment["SSI_TARGET_PATH"] == (
+        "C:\\Example\\service.exe"
+    )
+
+
+def test_get_file_permissions_handles_collection_failure(monkeypatch):
+    monkeypatch.setattr(
+        permissions_inspector.subprocess,
+        "run",
+        lambda *args, **kwargs: make_process_result(
+            "",
+            returncode=1,
+            stderr="Access denied.",
+        ),
+    )
+
+    result = permissions_inspector.get_file_permissions(
+        "C:\\Restricted\\service.exe"
+    )
+
+    assert result["status"] == "error"
+    assert result["error"] == "Access denied."

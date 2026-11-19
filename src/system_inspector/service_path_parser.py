@@ -15,18 +15,15 @@ UNQUOTED_EXECUTABLE_PATTERN = re.compile(
 )
 
 
-def get_service_executable_directory(binary_path: str) -> str | None:
-    """Return the executable directory only when its path is unambiguous."""
+def get_service_executable_path(binary_path: str) -> str | None:
+    """Return an absolute executable path only when it is unambiguous."""
 
     if not isinstance(binary_path, str):
         return None
 
     value = binary_path.strip()
 
-    if not value:
-        return None
-
-    if "%" in value:
+    if not value or "%" in value:
         return None
 
     quoted_match = QUOTED_EXECUTABLE_PATTERN.match(value)
@@ -42,6 +39,17 @@ def get_service_executable_directory(binary_path: str) -> str | None:
         executable_path = unquoted_match.group("executable")
 
     if not ntpath.isabs(executable_path):
+        return None
+
+    return executable_path
+
+
+def get_service_executable_directory(binary_path: str) -> str | None:
+    """Return the executable directory only when its path is unambiguous."""
+
+    executable_path = get_service_executable_path(binary_path)
+
+    if executable_path is None:
         return None
 
     directory = ntpath.dirname(executable_path)
