@@ -12,6 +12,7 @@ A modular, read-only Windows security inspection tool built with Python.
 - Group IPv4 and IPv6 findings by process and port.
 - Detect potentially unsafe unquoted Windows service executable paths.
 - Inspect Windows service executable directory permissions.
+- Inspect Windows service executable file permissions.
 - Generate JSON security reports.
 
 ## Security Analysis
@@ -65,6 +66,33 @@ The analysis:
 - Does not classify directories as vulnerable based solely on ACL entries.
 - Only recognizes a defined set of privileged SIDs; other identities are not automatically considered unprivileged or exploitable.
 - Treats ambiguous or unsupported service executable paths as inconclusive.
+- Performs read-only inspection and does not modify services or filesystem permissions.
+
+### SSI-004 - Windows Service Executable File Permissions
+
+Inspects the access control lists (ACLs) of the executable files used by Windows services.
+
+The analysis:
+
+- Extracts unambiguous absolute `.exe` paths from service binary paths.
+- Identifies Allow entries with potentially relevant file write permissions.
+- Separates permissions assigned to known privileged SIDs from other identities.
+- Preserves permission evidence, including identities, SIDs, rights, and inheritance information.
+- Uses file-specific write permission masks, excluding directory-only permissions.
+- Reuses ACL collection results for services referencing the same executable file.
+- Includes executable file permission data in the JSON report.
+- Reports privileged-only write permissions separately from potentially relevant permissions.
+
+**Limitations:**
+
+- Does not calculate effective access for users or groups.
+- Does not resolve group membership, access tokens, or the complete Windows authorization process.
+- Does not confirm whether non-privileged users can modify service executables.
+- Does not classify executable files as vulnerable based solely on ACL entries.
+- Only recognizes a defined set of privileged SIDs; other identities are not automatically considered unprivileged or exploitable.
+- Does not expand environment variables in service paths.
+- Treats ambiguous, relative, or unsupported executable paths as inconclusive.
+- Inspects executable files only; it does not inspect service configuration files or other dependencies.
 - Performs read-only inspection and does not modify services or filesystem permissions.
 
 ## Installation

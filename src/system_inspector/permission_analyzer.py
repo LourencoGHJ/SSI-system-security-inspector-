@@ -1,7 +1,7 @@
-"""Conservative analysis of Windows directory ACL entries."""
+"""Conservative analysis of Windows filesystem ACL entries."""
 
 
-WRITE_RIGHTS_MASK = (
+DIRECTORY_WRITE_RIGHTS_MASK = (
     0x00000002  # WriteData / CreateFiles
     | 0x00000004  # AppendData / CreateDirectories
     | 0x00000010  # WriteExtendedAttributes
@@ -13,6 +13,19 @@ WRITE_RIGHTS_MASK = (
     | 0x10000000  # GenericAll
     | 0x40000000  # GenericWrite
 )
+
+FILE_WRITE_RIGHTS_MASK = (
+    0x00000002  # WriteData
+    | 0x00000004  # AppendData
+    | 0x00000010  # WriteExtendedAttributes
+    | 0x00000100  # WriteAttributes
+    | 0x00010000  # Delete
+    | 0x00040000  # ChangePermissions / WriteDac
+    | 0x00080000  # TakeOwnership / WriteOwner
+    | 0x10000000  # GenericAll
+    | 0x40000000  # GenericWrite
+)
+
 
 PRIVILEGED_SIDS = {
     "S-1-5-18",  # Local System
@@ -34,8 +47,17 @@ def _inconclusive_result(reason):
     }
 
 
-def analyze_directory_acl(acl_data: dict) -> dict:
+def analyze_filesystem_acl(acl_data: dict, object_type: str = "directory") -> dict:
     """Classify write-related ACEs without claiming effective access."""
+
+    if object_type not in {"file", "directory"}:
+        return _inconclusive_result("Unsupported filesystem object type.")
+
+    write_rights_mask = (
+        FILE_WRITE_RIGHTS_MASK
+        if object_type == "file"
+        else DIRECTORY_WRITE_RIGHTS_MASK
+    )
 
     if not isinstance(acl_data, dict):
         return _inconclusive_result("Invalid ACL data.")
@@ -74,7 +96,7 @@ def analyze_directory_acl(acl_data: dict) -> dict:
             unresolved_aces += 1
             continue
 
-        if not rights_mask & WRITE_RIGHTS_MASK:
+        if not rights_mask & write_rights_mask:
             continue
 
         access_type = str(rule.get("access_type", "")).lower()
@@ -130,3 +152,10 @@ def analyze_directory_acl(acl_data: dict) -> dict:
         "unresolved_aces": unresolved_aces,
         "effective_access_confirmed": False,
     }
+
+
+
+def analyze_directory_acl(acl_data: dict) -> dict:
+    """Backward-compatible wrapper for directory ACL analysis."""
+
+    return analyze_filesystem_acl(acl_data)
