@@ -156,3 +156,79 @@ def test_assesses_unknown_access_type_as_inconclusive():
     )
     assert result["assessment"] == "inconclusive"
     assert result["unresolved_aces"] == 1
+
+
+def test_classifies_system_write_permission_as_privileged():
+    result = analyze_directory_acl(make_acl([
+        make_rule(0x00000002, sid="S-1-5-18", identity="NT AUTHORITY\\SYSTEM")
+    ]))
+
+    assert result["potential_write_aces"] == []
+    assert len(result["privileged_write_aces"]) == 1
+    assert result["assessment"] == "privileged_write_permissions_only"
+
+
+def test_classifies_administrators_write_permission_as_privileged():
+    result = analyze_directory_acl(make_acl([
+        make_rule(
+            0x00000002,
+            sid="S-1-5-32-544",
+            identity="BUILTIN\\Administrators",
+        )
+    ]))
+
+    assert result["potential_write_aces"] == []
+    assert len(result["privileged_write_aces"]) == 1
+
+
+def test_classifies_trusted_installer_write_permission_as_privileged():
+    trusted_installer_sid = (
+        "S-1-5-80-956008885-3418522649-1831038044-1853292631-2271478464"
+    )
+
+    result = analyze_directory_acl(make_acl([
+        make_rule(0x00000002, sid=trusted_installer_sid)
+    ]))
+
+    assert result["potential_write_aces"] == []
+    assert len(result["privileged_write_aces"]) == 1
+
+
+def test_keeps_regular_users_write_permission_as_potential():
+    result = analyze_directory_acl(make_acl([
+        make_rule(0x00000002, sid="S-1-5-32-545")
+    ]))
+
+    assert len(result["potential_write_aces"]) == 1
+    assert result["privileged_write_aces"] == []
+    assert result["assessment"] == "potential_write_permissions_detected"
+
+
+def test_preserves_privileged_and_potential_write_permissions_separately():
+    result = analyze_directory_acl(make_acl([
+        make_rule(0x00000002, sid="S-1-5-18"),
+        make_rule(0x00000002, sid="S-1-5-32-545"),
+    ]))
+
+    assert len(result["privileged_write_aces"]) == 1
+    assert len(result["potential_write_aces"]) == 1
+    assert result["assessment"] == "potential_write_permissions_detected"
+
+
+def test_preserves_unknown_sid_as_potential_and_unresolved():
+    result = analyze_directory_acl(make_acl([
+        make_rule(0x00000002, sid=None)
+    ]))
+
+    assert len(result["potential_write_aces"]) == 1
+    assert result["privileged_write_aces"] == []
+    assert result["unresolved_aces"] == 1
+    assert result["assessment"] == "potential_write_permissions_detected"
+
+
+def test_never_confirms_effective_access():
+    result = analyze_directory_acl(make_acl([
+        make_rule(0x00000002, sid="S-1-5-32-545")
+    ]))
+
+    assert result["effective_access_confirmed"] is False

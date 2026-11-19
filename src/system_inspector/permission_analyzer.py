@@ -1,7 +1,5 @@
 """Conservative analysis of Windows directory ACL entries."""
 
-from typing import Any
-
 
 WRITE_RIGHTS_MASK = (
     0x00000002  # WriteData / CreateFiles
@@ -16,40 +14,46 @@ WRITE_RIGHTS_MASK = (
     | 0x40000000  # GenericWrite
 )
 
+PRIVILEGED_SIDS = {
+    "S-1-5-18",  # Local System
+    "S-1-5-32-544",  # Built-in Administrators
+    "S-1-5-80-956008885-3418522649-1831038044-1853292631-2271478464",
+    # NT SERVICE\TrustedInstaller
+}
+
+
+def _inconclusive_result(reason):
+    return {
+        "status": "inconclusive",
+        "reason": reason,
+        "potential_write_aces": [],
+        "privileged_write_aces": [],
+        "deny_write_aces": [],
+        "unresolved_aces": 0,
+        "effective_access_confirmed": False,
+    }
+
 
 def analyze_directory_acl(acl_data: dict) -> dict:
-    """Identify potentially relevant write ACEs without claiming effective access."""
+    """Classify write-related ACEs without claiming effective access."""
 
     if not isinstance(acl_data, dict):
-        return {
-            "status": "inconclusive",
-            "reason": "Invalid ACL data.",
-            "potential_write_aces": [],
-            "deny_write_aces": [],
-            "effective_access_confirmed": False,
-        }
+        return _inconclusive_result("Invalid ACL data.")
 
     if acl_data.get("status") != "success":
-        return {
-            "status": "inconclusive",
-            "reason": acl_data.get("error", "ACL collection was unsuccessful."),
-            "potential_write_aces": [],
-            "deny_write_aces": [],
-            "effective_access_confirmed": False,
-        }
+        return _inconclusive_result(
+            acl_data.get("error", "ACL collection was unsuccessful.")
+        )
 
     access_rules = acl_data.get("access_rules")
 
     if not isinstance(access_rules, list):
-        return {
-            "status": "inconclusive",
-            "reason": "ACL access rules are missing or invalid.",
-            "potential_write_aces": [],
-            "deny_write_aces": [],
-            "effective_access_confirmed": False,
-        }
+        return _inconclusive_result(
+            "ACL access rules are missing or invalid."
+        )
 
     potential_write_aces = []
+    privileged_write_aces = []
     deny_write_aces = []
     unresolved_aces = 0
 
@@ -64,10 +68,8 @@ def analyze_directory_acl(acl_data: dict) -> dict:
         if "InheritOnly" in propagation_flags:
             continue
 
-        rights_value = rule.get("rights_value")
-
         try:
-            rights_mask = int(rights_value) & 0xFFFFFFFF
+            rights_mask = int(rule.get("rights_value")) & 0xFFFFFFFF
         except (TypeError, ValueError):
             unresolved_aces += 1
             continue
@@ -76,10 +78,11 @@ def analyze_directory_acl(acl_data: dict) -> dict:
             continue
 
         access_type = str(rule.get("access_type", "")).lower()
+        identity_sid = rule.get("identity_sid")
 
         evidence = {
             "identity": rule.get("identity"),
-            "identity_sid": rule.get("identity_sid"),
+            "identity_sid": identity_sid,
             "access_type": rule.get("access_type"),
             "rights_value": rights_mask,
             "inheritance_flags": inheritance_flags,
@@ -87,20 +90,34 @@ def analyze_directory_acl(acl_data: dict) -> dict:
             "is_inherited": rule.get("is_inherited"),
         }
 
-        if not rule.get("identity_sid"):
+        if not identity_sid:
             unresolved_aces += 1
 
-        if access_type == "allow":
-            potential_write_aces.append(evidence)
-        elif access_type == "deny":
+        if access_type == "deny":
             deny_write_aces.append(evidence)
-        else:
+            continue
+
+        if access_type != "allow":
             unresolved_aces += 1
+            continue
+
+        normalized_sid = (
+            str(identity_sid).strip().upper()
+            if identity_sid
+            else None
+        )
+
+        if normalized_sid in PRIVILEGED_SIDS:
+            privileged_write_aces.append(evidence)
+        else:
+            potential_write_aces.append(evidence)
 
     if potential_write_aces:
         assessment = "potential_write_permissions_detected"
     elif unresolved_aces:
         assessment = "inconclusive"
+    elif privileged_write_aces:
+        assessment = "privileged_write_permissions_only"
     else:
         assessment = "no_allow_write_permissions_detected"
 
@@ -108,6 +125,7 @@ def analyze_directory_acl(acl_data: dict) -> dict:
         "status": "success",
         "assessment": assessment,
         "potential_write_aces": potential_write_aces,
+        "privileged_write_aces": privileged_write_aces,
         "deny_write_aces": deny_write_aces,
         "unresolved_aces": unresolved_aces,
         "effective_access_confirmed": False,

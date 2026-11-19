@@ -48,16 +48,23 @@ Inspects the access control lists (ACLs) of directories containing Windows servi
 The analysis:
 
 - Identifies Allow and Deny entries with potentially relevant write permissions.
+- Separates write permissions assigned to known privileged SIDs from other identities.
+- Recognizes Local System, Built-in Administrators, and TrustedInstaller by SID.
+- Preserves unresolved identities as potential evidence and tracks them separately.
 - Excludes entries marked as `InheritOnly` from the inspected directory's analysis.
 - Preserves permission evidence, including identities, SIDs, rights, and inheritance information.
 - Reuses ACL collection results for services sharing the same executable directory.
 - Includes directory permission data in the JSON report.
+- Reports privileged-only write permissions separately from potentially relevant permissions.
 
 **Limitations:**
 
 - Does not calculate effective access for users or groups.
+- Does not resolve group membership, access tokens, or the complete Windows authorization process.
 - Does not confirm whether non-privileged users can modify service directories.
-- Does not classify directories as vulnerable based solely on potentially relevant permissions.
+- Does not classify directories as vulnerable based solely on ACL entries.
+- Only recognizes a defined set of privileged SIDs; other identities are not automatically considered unprivileged or exploitable.
+- Treats ambiguous or unsupported service executable paths as inconclusive.
 - Performs read-only inspection and does not modify services or filesystem permissions.
 
 ## Installation
