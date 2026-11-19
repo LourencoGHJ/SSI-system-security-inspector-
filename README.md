@@ -10,6 +10,8 @@ A modular, read-only Windows security inspection tool built with Python.
 - Inspect Windows services.
 - Detect services bound to all network interfaces.
 - Group IPv4 and IPv6 findings by process and port.
+- Detect potentially unsafe unquoted Windows service executable paths.
+- Inspect Windows service executable directory permissions.
 - Generate JSON security reports.
 
 ## Security Analysis
@@ -24,6 +26,39 @@ Identifies listening services bound to all network interfaces:
 Findings are classified as LOW and grouped when they belong to the same process and port.
 
 A wildcard binding does not necessarily mean that a service is externally accessible. Actual exposure depends on firewall rules and network configuration.
+
+### SSI-002 - Unquoted Windows Service Executable Paths
+
+Identifies Windows services whose executable paths:
+
+- Are not enclosed in quotation marks.
+- Contain spaces in the executable path.
+- Reference an executable ending in `.exe`.
+
+The analysis includes service information such as the service name, binary path, account, startup type, and current status.
+
+Findings are classified as LOW.
+
+This detection identifies a potentially unsafe service configuration. It does not confirm exploitability or verify filesystem permissions.
+
+### SSI-003 - Windows Service Directory Permissions
+
+Inspects the access control lists (ACLs) of directories containing Windows service executables.
+
+The analysis:
+
+- Identifies Allow and Deny entries with potentially relevant write permissions.
+- Excludes entries marked as `InheritOnly` from the inspected directory's analysis.
+- Preserves permission evidence, including identities, SIDs, rights, and inheritance information.
+- Reuses ACL collection results for services sharing the same executable directory.
+- Includes directory permission data in the JSON report.
+
+**Limitations:**
+
+- Does not calculate effective access for users or groups.
+- Does not confirm whether non-privileged users can modify service directories.
+- Does not classify directories as vulnerable based solely on potentially relevant permissions.
+- Performs read-only inspection and does not modify services or filesystem permissions.
 
 ## Installation
 
@@ -59,17 +94,3 @@ Windows
 ## Language
 
 Python 3.13+
-
-### SSI-002 - Unquoted Windows Service Executable Paths
-
-Identifies Windows services whose executable paths:
-
-- Are not enclosed in quotation marks.
-- Contain spaces in the executable path.
-- Reference an executable ending in `.exe`.
-
-The analysis includes service information such as the service name, binary path, account, startup type, and current status.
-
-Findings are classified as LOW.
-
-This detection identifies a potentially unsafe service configuration. It does not confirm exploitability or verify filesystem permissions. Further investigation of directory permissions and executable path resolution is required.

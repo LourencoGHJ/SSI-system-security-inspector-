@@ -1,3 +1,4 @@
+from copy import deepcopy
 import json
 
 from system_inspector import report_generator
@@ -36,6 +37,11 @@ def mock_system_data(
             "username": "LocalSystem",
         }],
     )
+    monkeypatch.setattr(
+        report_generator.service_permissions_inspector,
+        "inspect_service_permissions",
+        lambda services: [],
+    )
 
 
 def test_generate_report_contains_expected_sections(monkeypatch, tmp_path):
@@ -50,7 +56,6 @@ def test_generate_report_contains_expected_sections(monkeypatch, tmp_path):
     )
 
     output_path = tmp_path / "reports" / "security-report.json"
-
     report = report_generator.generate_report(output_path)
 
     assert set(report) == {
@@ -59,6 +64,7 @@ def test_generate_report_contains_expected_sections(monkeypatch, tmp_path):
         "processes",
         "listening_ports",
         "services",
+        "service_directory_permissions",
         "security_findings",
     }
     assert report["system"]["hostname"] == "test-pc"
@@ -67,6 +73,7 @@ def test_generate_report_contains_expected_sections(monkeypatch, tmp_path):
     assert len(report["services"]) == 1
     assert report["services"][0]["name"] == "ExampleService"
     assert report["services"][0]["username"] == "LocalSystem"
+    assert report["service_directory_permissions"] == []
     assert report["security_findings"] == []
     assert output_path.exists()
 
@@ -83,13 +90,13 @@ def test_generate_report_writes_valid_json(monkeypatch, tmp_path):
     )
 
     output_path = tmp_path / "security-report.json"
-
     report_generator.generate_report(output_path)
 
     saved_report = json.loads(output_path.read_text(encoding="utf-8"))
 
     assert saved_report["system"]["hostname"] == "test-pc"
     assert saved_report["processes"][0]["name"] == "example.exe"
+    assert saved_report["service_directory_permissions"] == []
     assert len(saved_report["security_findings"]) == 1
     assert saved_report["security_findings"][0]["rule_id"] == "SSI-001"
     assert saved_report["security_findings"][0]["evidence"]["port"] == 8080
@@ -105,7 +112,6 @@ def test_generate_report_includes_unquoted_service_path_finding(
     )
 
     output_path = tmp_path / "security-report.json"
-
     report = report_generator.generate_report(output_path)
 
     assert len(report["security_findings"]) == 1
@@ -118,5 +124,40 @@ def test_generate_report_includes_unquoted_service_path_finding(
     assert finding["evidence"]["exploitability_confirmed"] is False
 
     saved_report = json.loads(output_path.read_text(encoding="utf-8"))
-
     assert saved_report["security_findings"][0]["rule_id"] == "SSI-002"
+
+
+def test_generate_report_includes_service_directory_permissions(
+    monkeypatch,
+    tmp_path,
+):
+    mock_system_data(monkeypatch)
+
+    expected_permissions = [{
+        "service_name": "ExampleService",
+        "directory": "C:\\Example",
+        "status": "success",
+        "effective_access_confirmed": False,
+    }]
+
+    received_services = []
+
+    def fake_inspect_service_permissions(services):
+        received_services.extend(deepcopy(services))
+        return expected_permissions
+
+    monkeypatch.setattr(
+        report_generator.service_permissions_inspector,
+        "inspect_service_permissions",
+        fake_inspect_service_permissions,
+    )
+
+    output_path = tmp_path / "security-report.json"
+    report = report_generator.generate_report(output_path)
+
+    assert len(received_services) == 1
+    assert received_services[0]["name"] == "ExampleService"
+    assert report["service_directory_permissions"] == expected_permissions
+
+    saved_report = json.loads(output_path.read_text(encoding="utf-8"))
+    assert saved_report["service_directory_permissions"] == expected_permissions
