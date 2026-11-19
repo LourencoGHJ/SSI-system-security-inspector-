@@ -239,4 +239,3 @@ def test_get_directory_permissions_rejects_invalid_rights_value(
 
     assert result["status"] == "error"
     assert result["error"] == "Invalid ACL rights value."
-

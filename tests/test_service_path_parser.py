@@ -50,4 +50,3 @@ def test_rejects_environment_variable_paths():
     assert get_service_executable_directory(
         "%SystemRoot%\\System32\\service.exe"
     ) is None
-
