@@ -3,7 +3,11 @@ import json
 from system_inspector import report_generator
 
 
-def mock_system_data(monkeypatch, listening_ports=None):
+def mock_system_data(
+    monkeypatch,
+    listening_ports=None,
+    binary_path="C:\\Example\\service.exe",
+):
     monkeypatch.setattr(
         report_generator.system_info,
         "get_system_info",
@@ -28,7 +32,8 @@ def mock_system_data(monkeypatch, listening_ports=None):
             "status": "running",
             "start_type": "automatic",
             "pid": 123,
-            "binary_path": "C:\\Example\\service.exe",
+            "binary_path": binary_path,
+            "username": "LocalSystem",
         }],
     )
 
@@ -61,6 +66,7 @@ def test_generate_report_contains_expected_sections(monkeypatch, tmp_path):
     assert len(report["listening_ports"]) == 1
     assert len(report["services"]) == 1
     assert report["services"][0]["name"] == "ExampleService"
+    assert report["services"][0]["username"] == "LocalSystem"
     assert report["security_findings"] == []
     assert output_path.exists()
 
@@ -87,3 +93,30 @@ def test_generate_report_writes_valid_json(monkeypatch, tmp_path):
     assert len(saved_report["security_findings"]) == 1
     assert saved_report["security_findings"][0]["rule_id"] == "SSI-001"
     assert saved_report["security_findings"][0]["evidence"]["port"] == 8080
+
+
+def test_generate_report_includes_unquoted_service_path_finding(
+    monkeypatch,
+    tmp_path,
+):
+    mock_system_data(
+        monkeypatch,
+        binary_path="C:\\Program Files\\Example\\service.exe",
+    )
+
+    output_path = tmp_path / "security-report.json"
+
+    report = report_generator.generate_report(output_path)
+
+    assert len(report["security_findings"]) == 1
+
+    finding = report["security_findings"][0]
+
+    assert finding["rule_id"] == "SSI-002"
+    assert finding["evidence"]["service_name"] == "ExampleService"
+    assert finding["evidence"]["username"] == "LocalSystem"
+    assert finding["evidence"]["exploitability_confirmed"] is False
+
+    saved_report = json.loads(output_path.read_text(encoding="utf-8"))
+
+    assert saved_report["security_findings"][0]["rule_id"] == "SSI-002"

@@ -19,6 +19,9 @@ class FakeService:
     def start_type(self):
         return "automatic"
 
+    def username(self):
+        return "LocalSystem"
+
     def pid(self):
         return 123
 
@@ -38,6 +41,7 @@ def test_service_inspector_returns_service_information(monkeypatch):
         "display_name": "Example Service",
         "status": "running",
         "start_type": "automatic",
+        "username": "LocalSystem",
         "pid": 123,
         "binary_path": "C:\\Example\\service.exe",
     }]

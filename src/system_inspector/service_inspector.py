@@ -12,6 +12,7 @@ def get_windows_services() -> list[dict[str, str | int | None]]:
                 "display_name": service.display_name(),
                 "status": service.status(),
                 "start_type": service.start_type(),
+                "username": service.username(),
                 "pid": service.pid(),
                 "binary_path": service.binpath(),
             })

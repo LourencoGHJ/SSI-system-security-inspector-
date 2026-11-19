@@ -12,16 +12,20 @@ from system_inspector import system_info
 def generate_report(output_path: str | Path) -> dict:
     """Collect system data, analyze security findings, and save a report."""
     listening_ports = network_inspector.get_listening_ports()
+    services = service_inspector.get_windows_services()
+
+    security_findings = (
+        security_analyzer.analyze_listening_ports(listening_ports)
+        + security_analyzer.analyze_unquoted_service_paths(services)
+    )
 
     report = {
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "system": system_info.get_system_info(),
         "processes": process_inspector.get_running_processes(),
         "listening_ports": listening_ports,
-        "services": service_inspector.get_windows_services(),
-        "security_findings": security_analyzer.analyze_listening_ports(
-            listening_ports
-        ),
+        "services": services,
+        "security_findings": security_findings,
     }
 
     path = Path(output_path)
