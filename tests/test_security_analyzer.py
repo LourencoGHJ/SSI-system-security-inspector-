@@ -202,3 +202,35 @@ def test_ignores_quoted_executable_with_arguments():
     }]
 
     assert analyze_unquoted_service_paths(services) == []
+
+
+def test_detects_service_path_with_unclosed_opening_quote():
+    services = [{
+        "name": "MalformedQuotedService",
+        "binary_path": '"C:\\Program Files\\Example\\service.exe',
+    }]
+
+    findings = analyze_unquoted_service_paths(services)
+
+    assert len(findings) == 1
+    assert findings[0]["rule_id"] == "SSI-002"
+    assert findings[0]["evidence"]["service_name"] == (
+        "MalformedQuotedService"
+    )
+    assert findings[0]["evidence"]["quoting_status"] == "malformed_quoting"
+    assert findings[0]["evidence"]["executable_path"] is None
+    assert findings[0]["evidence"]["exploitability_confirmed"] is False
+
+
+def test_detects_misplaced_closing_quote_in_service_path():
+    services = [{
+        "name": "MisplacedQuoteService",
+        "binary_path": '"C:\\Program Files"\\Example\\service.exe',
+    }]
+
+    findings = analyze_unquoted_service_paths(services)
+
+    assert len(findings) == 1
+    assert findings[0]["evidence"]["quoting_status"] == "malformed_quoting"
+    assert findings[0]["evidence"]["executable_path"] is None
+    assert findings[0]["evidence"]["exploitability_confirmed"] is False

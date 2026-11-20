@@ -55,7 +55,7 @@ def analyze_listening_ports(
 def analyze_unquoted_service_paths(
     services: list[dict],
 ) -> list[dict]:
-    """Identify Windows services with unquoted executable paths containing spaces."""
+    """Identify Windows services with unsafe executable path quoting."""
     findings = []
 
     for service in services:
@@ -66,38 +66,59 @@ def analyze_unquoted_service_paths(
 
         binary_path = binary_path.strip()
 
-        if not binary_path or binary_path.startswith('"'):
+        if not binary_path:
             continue
 
-        executable_match = re.match(
-            r"^(?P<executable>.+?\.exe)(?:\s|$)",
-            binary_path,
-            flags=re.IGNORECASE,
-        )
+        quoting_status = "unquoted"
 
-        if executable_match is None:
-            continue
+        if binary_path.startswith('"'):
+            closing_quote_index = binary_path.find('"', 1)
 
-        executable_path = executable_match.group("executable")
+            has_valid_closing_quote = (
+                closing_quote_index != -1
+                and (
+                    closing_quote_index == len(binary_path) - 1
+                    or binary_path[closing_quote_index + 1].isspace()
+                )
+            )
 
-        if not any(character.isspace() for character in executable_path):
-            continue
+            if has_valid_closing_quote:
+                continue
+
+            quoting_status = "malformed_quoting"
+            executable_path = None
+        else:
+            executable_match = re.match(
+                r"^(?P<executable>.+?\.exe)(?:\s|$)",
+                binary_path,
+                flags=re.IGNORECASE,
+            )
+
+            if executable_match is None:
+                continue
+
+            executable_path = executable_match.group("executable")
+
+            if not any(character.isspace() for character in executable_path):
+                continue
 
         findings.append({
             "rule_id": "SSI-002",
             "severity": "low",
-            "title": "Unquoted Windows service executable path",
+            "title": "Windows service executable path quoting issue",
             "description": (
-                "The Windows service executable path contains spaces and "
-                "is not enclosed in quotation marks. This may create "
-                "ambiguous executable path resolution depending on the "
-                "Windows path and directory permissions."
+                "The Windows service executable path has missing or "
+                "malformed quotation marks, or is unquoted despite "
+                "containing spaces. This may create ambiguous executable "
+                "path resolution depending on the Windows path and "
+                "directory permissions."
             ),
             "evidence": {
                 "service_name": service.get("name"),
                 "display_name": service.get("display_name"),
                 "binary_path": binary_path,
                 "executable_path": executable_path,
+                "quoting_status": quoting_status,
                 "username": service.get("username"),
                 "start_type": service.get("start_type"),
                 "status": service.get("status"),
@@ -105,8 +126,9 @@ def analyze_unquoted_service_paths(
             },
             "recommendation": (
                 "Verify the service executable path and directory "
-                "permissions. Enclose the executable path in quotation "
-                "marks when appropriate."
+                "permissions. Correct malformed quotation marks or "
+                "enclose the executable path in quotation marks "
+                "when appropriate."
             ),
         })
 
