@@ -1,4 +1,7 @@
-from system_inspector.permission_analyzer import analyze_directory_acl
+from system_inspector.permission_analyzer import (
+    analyze_directory_acl,
+    analyze_filesystem_acl,
+)
 
 
 def make_rule(
@@ -232,3 +235,69 @@ def test_never_confirms_effective_access():
     ]))
 
     assert result["effective_access_confirmed"] is False
+
+
+
+def test_filesystem_analyzer_detects_file_write_permissions():
+    acl = make_acl([
+        make_rule(0x00000002, sid="S-1-5-32-545")
+    ])
+    acl["path"] = "C:\\Program Files\\Example\\service.exe"
+
+    result = analyze_filesystem_acl(acl)
+
+    assert result["assessment"] == "potential_write_permissions_detected"
+    assert len(result["potential_write_aces"]) == 1
+    assert result["effective_access_confirmed"] is False
+
+
+def test_directory_analyzer_remains_backward_compatible():
+    acl = make_acl([
+        make_rule(0x00000002, sid="S-1-5-32-545")
+    ])
+
+    directory_result = analyze_directory_acl(acl)
+    filesystem_result = analyze_filesystem_acl(acl)
+
+    assert directory_result == filesystem_result
+
+
+
+def test_file_analyzer_ignores_directory_only_delete_child_right():
+    acl = make_acl([
+        make_rule(0x00000040, sid="S-1-5-32-545")
+    ])
+
+    result = analyze_filesystem_acl(acl, object_type="file")
+
+    assert result["assessment"] == "no_allow_write_permissions_detected"
+    assert result["potential_write_aces"] == []
+
+
+def test_directory_analyzer_keeps_delete_child_write_right():
+    acl = make_acl([
+        make_rule(0x00000040, sid="S-1-5-32-545")
+    ])
+
+    result = analyze_filesystem_acl(acl, object_type="directory")
+
+    assert result["assessment"] == "potential_write_permissions_detected"
+
+
+def test_file_analyzer_detects_file_write_data_right():
+    acl = make_acl([
+        make_rule(0x00000002, sid="S-1-5-32-545")
+    ])
+
+    result = analyze_filesystem_acl(acl, object_type="file")
+
+    assert result["assessment"] == "potential_write_permissions_detected"
+
+
+def test_filesystem_analyzer_rejects_unknown_object_type():
+    result = analyze_filesystem_acl(
+        make_acl([]),
+        object_type="volume",
+    )
+
+    assert result["status"] == "inconclusive"

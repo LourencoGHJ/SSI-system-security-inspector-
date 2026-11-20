@@ -3,8 +3,8 @@ import os
 import subprocess
 
 
-def get_directory_permissions(directory_path: str) -> dict:
-    """Collect directory ACL information using Windows PowerShell."""
+def _get_path_permissions(path: str) -> dict:
+    """Collect filesystem ACL information using Windows PowerShell."""
 
     script = r"""
 $path = $env:SSI_TARGET_PATH
@@ -54,7 +54,7 @@ catch {
 """
 
     environment = os.environ.copy()
-    environment["SSI_TARGET_PATH"] = directory_path
+    environment["SSI_TARGET_PATH"] = path
 
     try:
         completed = subprocess.run(
@@ -75,14 +75,14 @@ catch {
         )
     except (OSError, subprocess.TimeoutExpired) as error:
         return {
-            "path": directory_path,
+            "path": path,
             "status": "error",
             "error": str(error),
         }
 
     if completed.returncode != 0:
         return {
-            "path": directory_path,
+            "path": path,
             "status": "error",
             "error": completed.stderr.strip() or "PowerShell execution failed.",
         }
@@ -91,14 +91,14 @@ catch {
         result = json.loads(completed.stdout)
     except json.JSONDecodeError:
         return {
-            "path": directory_path,
+            "path": path,
             "status": "error",
             "error": "Invalid JSON returned by PowerShell.",
         }
 
     if not isinstance(result, dict):
         return {
-            "path": directory_path,
+            "path": path,
             "status": "error",
             "error": "Invalid ACL response structure.",
         }
@@ -108,7 +108,7 @@ catch {
 
     if result.get("status") != "success":
         return {
-            "path": directory_path,
+            "path": path,
             "status": "error",
             "error": "Missing or invalid ACL response status.",
         }
@@ -117,7 +117,7 @@ catch {
 
     if not isinstance(access_rules, list):
         return {
-            "path": directory_path,
+            "path": path,
             "status": "error",
             "error": "Invalid ACL access rules structure.",
         }
@@ -125,7 +125,7 @@ catch {
     for rule in access_rules:
         if not isinstance(rule, dict):
             return {
-                "path": directory_path,
+                "path": path,
                 "status": "error",
                 "error": "Invalid ACL access rule.",
             }
@@ -134,7 +134,7 @@ catch {
 
         if isinstance(rights_value, bool):
             return {
-                "path": directory_path,
+                "path": path,
                 "status": "error",
                 "error": "Invalid ACL rights value.",
             }
@@ -143,9 +143,22 @@ catch {
             rule["rights_value"] = int(rights_value) & 0xFFFFFFFF
         except (TypeError, ValueError):
             return {
-                "path": directory_path,
+                "path": path,
                 "status": "error",
                 "error": "Invalid ACL rights value.",
             }
 
     return result
+
+
+
+def get_directory_permissions(directory_path: str) -> dict:
+    """Collect ACL information for a directory."""
+
+    return _get_path_permissions(directory_path)
+
+
+def get_file_permissions(file_path: str) -> dict:
+    """Collect ACL information for a file."""
+
+    return _get_path_permissions(file_path)
