@@ -4,8 +4,12 @@ import psutil
 def get_windows_services() -> list[dict[str, str | int | None]]:
     """Return basic information about Windows services."""
     services = []
+    service_iterator = getattr(psutil, "win_service_iter", None)
 
-    for service in psutil.win_service_iter():
+    if not callable(service_iterator):
+        return services
+
+    for service in service_iterator():
         try:
             services.append({
                 "name": service.name(),

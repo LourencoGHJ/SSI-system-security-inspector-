@@ -34,6 +34,7 @@ def test_service_inspector_returns_service_information(monkeypatch):
         psutil,
         "win_service_iter",
         lambda: [FakeService()],
+        raising=False,
     )
 
     assert get_windows_services() == [{
@@ -55,6 +56,7 @@ def test_service_inspector_sorts_services(monkeypatch):
             FakeService("ZuluService"),
             FakeService("AlphaService"),
         ],
+        raising=False,
     )
 
     services = get_windows_services()
@@ -74,6 +76,7 @@ def test_service_inspector_skips_inaccessible_services(monkeypatch):
         psutil,
         "win_service_iter",
         lambda: [InaccessibleService()],
+        raising=False,
     )
 
     assert get_windows_services() == []
@@ -88,6 +91,14 @@ def test_service_inspector_skips_missing_services(monkeypatch):
         psutil,
         "win_service_iter",
         lambda: [MissingService()],
+        raising=False,
     )
+
+    assert get_windows_services() == []
+
+
+
+def test_service_inspector_handles_unsupported_platform(monkeypatch):
+    monkeypatch.delattr(psutil, "win_service_iter", raising=False)
 
     assert get_windows_services() == []

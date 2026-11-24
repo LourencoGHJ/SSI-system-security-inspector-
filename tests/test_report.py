@@ -10,6 +10,11 @@ def mock_system_data(
     binary_path="C:\\Example\\service.exe",
 ):
     monkeypatch.setattr(
+        report_generator.platform,
+        "system",
+        lambda: "Windows",
+    )
+    monkeypatch.setattr(
         report_generator.system_info,
         "get_system_info",
         lambda: {"hostname": "test-pc"},
@@ -65,6 +70,7 @@ def test_generate_report_contains_expected_sections(monkeypatch, tmp_path):
 
     assert set(report) == {
         "generated_at",
+        "platform_support",
         "system",
         "processes",
         "listening_ports",
@@ -204,3 +210,57 @@ def test_generate_report_includes_service_file_permissions(
 
     saved_report = json.loads(output_path.read_text(encoding="utf-8"))
     assert saved_report["service_file_permissions"] == expected_permissions
+
+
+def test_generate_report_marks_windows_features_unsupported_on_linux(
+    monkeypatch,
+    tmp_path,
+):
+    mock_system_data(
+        monkeypatch,
+        listening_ports=[{
+            "address": "0.0.0.0",
+            "port": 8080,
+            "pid": 123,
+            "process_name": "example",
+        }],
+    )
+
+    monkeypatch.setattr(
+        report_generator.platform,
+        "system",
+        lambda: "Linux",
+    )
+
+    def unexpected_call(services):
+        raise AssertionError("Windows-only inspection must not run on Linux.")
+
+    monkeypatch.setattr(
+        report_generator.service_permissions_inspector,
+        "inspect_service_permissions",
+        unexpected_call,
+    )
+    monkeypatch.setattr(
+        report_generator.service_file_permissions_inspector,
+        "inspect_service_file_permissions",
+        unexpected_call,
+    )
+
+    output_path = tmp_path / "linux-report.json"
+    report = report_generator.generate_report(output_path)
+
+    assert report["services"] == []
+    assert report["service_directory_permissions"] == []
+    assert report["service_file_permissions"] == []
+
+    for feature in (
+        "windows_services",
+        "ssi_002_unquoted_service_paths",
+        "ssi_003_service_directory_permissions",
+        "ssi_004_service_file_permissions",
+    ):
+        assert report["platform_support"][feature]["supported"] is False
+        assert report["platform_support"][feature]["reason"]
+
+    assert len(report["security_findings"]) == 1
+    assert report["security_findings"][0]["rule_id"] == "SSI-001"

@@ -121,3 +121,61 @@ def test_handles_invalid_acl_data(monkeypatch):
     assert results[0]["status"] == "inconclusive"
     assert results[0]["acl_owner"] is None
     assert results[0]["reason"] == "File ACL data is invalid."
+
+
+def test_handles_unexpected_acl_collection_exception(monkeypatch):
+    calls = []
+
+    def collection_with_failure(path):
+        calls.append(path)
+
+        if path == "C:\\Broken\\service.exe":
+            raise RuntimeError("Unexpected PowerShell failure.")
+
+        return successful_acl()
+
+    monkeypatch.setattr(
+        service_file_permissions_inspector,
+        "get_file_permissions",
+        collection_with_failure,
+    )
+
+    results = service_file_permissions_inspector.inspect_service_file_permissions([
+        {
+            "name": "BrokenService",
+            "binary_path": '"C:\\Broken\\service.exe"',
+        },
+        {
+            "name": "HealthyService",
+            "binary_path": '"C:\\Healthy\\service.exe"',
+        },
+    ])
+
+    assert len(results) == 2
+    assert len(calls) == 2
+    assert results[0]["status"] == "inconclusive"
+    assert "Unexpected PowerShell failure." in results[0]["reason"]
+    assert results[1]["status"] == "success"
+    assert results[1]["acl_owner"] == "BUILTIN\\Administrators"
+    assert results[0]["effective_access_confirmed"] is False
+    assert results[1]["effective_access_confirmed"] is False
+
+
+def test_handles_service_without_binary_path(monkeypatch):
+    def unexpected_collection(path):
+        raise AssertionError("ACL collection should not be called.")
+
+    monkeypatch.setattr(
+        service_file_permissions_inspector,
+        "get_file_permissions",
+        unexpected_collection,
+    )
+
+    results = service_file_permissions_inspector.inspect_service_file_permissions([
+        {"name": "MissingPathService"}
+    ])
+
+    assert len(results) == 1
+    assert results[0]["status"] == "inconclusive"
+    assert results[0]["executable_path"] is None
+    assert results[0]["effective_access_confirmed"] is False

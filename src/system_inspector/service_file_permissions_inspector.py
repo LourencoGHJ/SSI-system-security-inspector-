@@ -38,7 +38,15 @@ def inspect_service_file_permissions(services: list[dict]) -> list[dict]:
         cache_key = ntpath.normcase(ntpath.normpath(executable_path))
 
         if cache_key not in acl_cache:
-            acl_cache[cache_key] = get_file_permissions(executable_path)
+            try:
+                acl_cache[cache_key] = get_file_permissions(executable_path)
+            except Exception as error:
+                acl_cache[cache_key] = {
+                    "status": "error",
+                    "error": (
+                        f"Unexpected ACL collection failure: {error}"
+                    ),
+                }
 
         acl_data = acl_cache[cache_key]
         analysis = analyze_filesystem_acl(acl_data, object_type="file")
